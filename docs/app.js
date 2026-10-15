@@ -483,6 +483,9 @@ function doReset() {
   $("dataInfo").textContent = `防具${data.armors.length}・装飾品${data.decos.length}・スキル${skillsSorted.length}`;
   renderWant(); renderSkillList(); renderWeapon(); renderArmorCond(); renderTalismanForm(); renderTalismans(); renderFix(); renderDecos(); renderMysets();
   bind(); showTab(state.tab || "cond");
+  // タブの高さを測って、選択中スキル欄の固定位置に使う
+  const setTabsH = () => document.documentElement.style.setProperty("--tabs-h", `${document.querySelector(".tabs").offsetHeight}px`);
+  setTabsH(); addEventListener("resize", setTabsH);
   call("ping").catch((e) => setStatus(`計算エンジンを起動できませんでした（${esc(e.message)}）。`, "ng"));
 })();
 export { TALISMAN_GROUPS };

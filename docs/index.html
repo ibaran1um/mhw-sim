@@ -179,6 +179,18 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 .skill-grid .skill-row { padding: 5px 4px; }
 .skill-sub { margin: 6px 0 12px; }
 .skill-sub h4 { display: flex; align-items: center; gap: 8px; font-size: .88rem; margin: 0 0 4px; padding: 2px 4px; color: var(--ink); }
+/* 選択中スキルの欄：スクロール中はタブのすぐ下に固定 */
+.want-sticky { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--tabs-h, 54px)); z-index: 4;
+  background: var(--panel); margin: -12px -12px 0; padding: 12px 12px 10px; border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid var(--line); }
+.want-sticky h2 { margin-bottom: 8px; }
+@media (max-width: 860px) {
+  .want-sticky { padding: 8px 12px 8px; }
+  .want-sticky h2 { font-size: .9rem; padding-bottom: 4px; margin-bottom: 6px; }
+  .want-sticky .chips { gap: 4px; }
+  .want-sticky .chip { font-size: .8rem; padding: 1px 2px 1px 8px; }
+  .want-sticky .chip button { min-height: 22px; padding: 0 4px; }
+}
 .deco-slots { margin-left: 6px; vertical-align: middle; }
 .deco-slots .slot { width: 1.35em; height: 1.35em; font-size: .68rem; }
 .skill-sub h4 .cnt { margin-left: auto; font-family: var(--font-num); font-size: .75rem; color: var(--muted); font-weight: 400; }
@@ -278,8 +290,10 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
     </div>
 
     <section class="box">
-      <h2>発動させたいスキル</h2>
-      <div class="chips" id="wantChips"></div>
+      <div class="want-sticky">
+        <h2>発動させたいスキル</h2>
+        <div class="chips" id="wantChips"></div>
+      </div>
       <div class="row" style="margin-top:10px">
         <input type="search" id="skillQ" class="grow" placeholder="スキル名で絞り込み">
       </div>
