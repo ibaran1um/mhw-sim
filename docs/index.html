@@ -219,6 +219,24 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 .lvnum { font-size: .8rem; }
 .tal .nm { font-size: 1.05rem; }
 .small { font-size: .85rem; }
+
+/* ---- 視認性（発動スキル一覧） ---- */
+:root { --band: #dfe3e8; --band-ink: #1d2430; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --band: #2b333e; --band-ink: #eef1f5; } }
+:root[data-theme="dark"] { --band: #2b333e; --band-ink: #eef1f5; }
+/* 武器スキル／防具スキルなどの大見出し：真鍮色の帯 */
+.skill-groups > div > h3 { background: var(--brass); color: var(--on-brass); font-size: 1.05rem; padding: 7px 12px; border-radius: 6px; margin: 4px 0 10px; letter-spacing: .06em; }
+/* 戦闘(生存)などの分類見出し：灰色の帯（wiki-db風） */
+.skill-sub h4 { background: var(--band); color: var(--band-ink); font-size: .95rem; font-weight: 700; padding: 6px 12px; border-radius: 4px; margin: 14px 0 8px; border-left: 0; }
+.skill-sub:first-of-type h4 { margin-top: 0; }
+/* 各スキルを枠で囲んで区切りをはっきりさせる */
+.skill-grid { gap: 6px 8px; }
+.skill-grid .skill-row { border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px 5px 10px; background: var(--panel); }
+.skill-grid .skill-row:last-child { border-bottom: 1px solid var(--line); }
+.skill-grid .skill-row.picked { border: 2px solid var(--brass); background: var(--brass-soft); padding: 4px 5px 4px 9px; }
+/* 固定した「発動させたいスキル」欄：下端を太線＋影で区切る */
+.want-sticky { border-bottom: 4px solid var(--brass); box-shadow: 0 6px 10px -4px rgba(0, 0, 0, .25); margin-bottom: 10px; }
+.want-sticky h2 { border-bottom: 0; padding-bottom: 0; }
 </style>
 </head>
 <body>
@@ -367,6 +385,6 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 <footer class="note">
   データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
 </footer>
-<script type="module" src="./app.js"></script>
+<script type="module" src="./app.js?v=20261015b"></script>
 </body>
 </html>
