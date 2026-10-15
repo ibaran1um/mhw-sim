@@ -237,6 +237,26 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 /* 固定した「発動させたいスキル」欄：下端を太線＋影で区切る */
 .want-sticky { border-bottom: 4px solid var(--brass); box-shadow: 0 6px 10px -4px rgba(0, 0, 0, .25); margin-bottom: 10px; }
 .want-sticky h2 { border-bottom: 0; padding-bottom: 0; }
+
+/* ---- スキル説明の吹き出し ---- */
+button.info { all: unset; cursor: help; color: inherit; font: inherit; border-bottom: 1px dotted var(--muted); }
+button.info:hover { color: var(--brass); border-bottom-color: var(--brass); }
+button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.skill-tip { position: fixed; z-index: 50; background: var(--panel); color: var(--ink); border: 2px solid var(--brass); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28); padding: 10px 12px; font-size: .9rem; max-height: 70vh; overflow-y: auto; }
+.skill-tip::before { content: ""; position: absolute; top: -8px; left: var(--arrow-x, 20px); border: 7px solid transparent; border-top: 0; border-bottom-color: var(--brass); }
+.skill-tip.up::before { top: auto; bottom: -8px; border-bottom: 0; border-top: 7px solid var(--brass); }
+.tip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.tip-head b { font-size: 1rem; }
+.tip-x { margin-left: auto; min-height: 28px; padding: 0 8px; }
+.tip-desc { margin: 0 0 8px; color: var(--muted); }
+.tip-lv { width: 100%; border-collapse: collapse; }
+.tip-lv th { text-align: left; white-space: nowrap; padding: 5px 10px 5px 4px; font-family: var(--font-num); font-size: .85rem; vertical-align: top; color: var(--muted); }
+.tip-lv td { padding: 5px 4px; }
+.tip-lv tr + tr { border-top: 1px solid var(--line); }
+.tip-lv tr.on { background: var(--brass-soft); }
+.tip-lv tr.on th { color: var(--ink); font-weight: 700; }
+.tip-sub { font-family: var(--font-body); font-size: .75rem; }
 </style>
 </head>
 <body>
@@ -385,6 +405,7 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 <footer class="note">
   データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
 </footer>
-<script type="module" src="./app.js?v=20261015b"></script>
+<div id="skillTip" class="skill-tip" role="tooltip" hidden></div>
+<script type="module" src="./app.js?v=20261015c"></script>
 </body>
 </html>

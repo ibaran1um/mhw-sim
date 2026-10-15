@@ -1,6 +1,6 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015b";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015c";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -67,7 +67,7 @@ function showTab(t) {
 function renderWant() {
   const ids = Object.keys(state.want).filter((k) => state.want[k] > 0 && usable(k));
   const html = ids.length
-    ? ids.map((id) => `<span class="chip">${esc(sn(id))} <b>${data.skills[id].k === "group" ? "" : "Lv" + state.want[id]}</b><button data-rm="${id}" aria-label="${esc(sn(id))}を外す">×</button></span>`).join("")
+    ? ids.map((id) => `<span class="chip"><button type="button" class="info" data-info="${id}">${esc(sn(id))}</button> <b>${data.skills[id].k === "group" ? "" : "Lv" + state.want[id]}</b><button data-rm="${id}" aria-label="${esc(sn(id))}を外す">×</button></span>`).join("")
     : `<span class="empty">まだ選んでいません。下の一覧からLvを押して追加します。</span>`;
   $("wantChips").innerHTML = html;
 }
@@ -81,7 +81,7 @@ function renderSkillList() {
     // 付けられる装飾品のスロット（例：集中 ①②③）
     const lvs = [...(decoLvs[s.id] || [])].sort();
     const slots = lvs.length ? `<span class="slots deco-slots" title="装飾品のスロット">${lvs.map((l) => `<span class="slot${s.k === "weapon" ? " w" : ""}">${l}</span>`).join("")}</span>` : "";
-    return `<div class="skill-row${cur ? " picked" : ""}"><span class="nm">${esc(s.n)}${slots}</span>${own}
+    return `<div class="skill-row${cur ? " picked" : ""}"><span class="nm"><button type="button" class="info" data-info="${s.id}">${esc(s.n)}</button>${slots}</span>${own}
       <span class="lv">${levels.map((l) => `<button class="${cur === l ? "on" : ""}" data-sk="${s.id}" data-lv="${l}">${label(l)}</button>`).join("")}</span></div>`;
   };
   const visible = (s) => usable(s.id) && (!q || s.n.includes(q));
@@ -218,7 +218,7 @@ function resultCard(s, idx, req, opts = {}) {
   else if (s.vtal) tal = `<tr><td class="part">護石</td><td colspan="2"><span class="rar r${s.vtal.rar}">R${s.vtal.rar}</span> ${esc(s.vtal.name)}（下の条件）${s.vtal.deco.length ? `<div class="decos">${s.vtal.deco.map(esc).join("、")}</div>` : ""}</td></tr>`;
   else tal = `<tr><td class="part">護石</td><td colspan="2" class="muted">なし</td></tr>`;
   const wrow = `<tr><td class="part">武器</td><td colspan="2">${s.weaponDeco.length ? `<span class="decos">${s.weaponDeco.map(esc).join("、")}</span>` : `<span class="muted small">装飾品なし</span>`}${s.kyo.set || s.kyo.group ? `<div class="small">巨戟付与: <b>${esc(s.kyo.set ? sn(s.kyo.set) : "－")}</b> ＋ <b>${esc(s.kyo.group ? sn(s.kyo.group) : "－")}</b></div>` : ""}</td></tr>`;
-  const skills = s.skills.map((k) => `<div class="sk${wantIds.has(k.id) ? " want" : ""}"><span class="${k.k === "set" || k.k === "group" ? "tag-set" : ""}">${esc(k.n)}</span>${k.k === "group" ? "発動" : k.k === "set" ? `<span class="lvnum" style="font-size:.9rem;color:var(--ink)">Lv${k.lv}<span class="muted small">（${k.pts}部位）</span></span>` : pips(k.lv, k.max)}</div>`).join("");
+  const skills = s.skills.map((k) => `<div class="sk${wantIds.has(k.id) ? " want" : ""}"><button type="button" class="info ${k.k === "set" || k.k === "group" ? "tag-set" : ""}" data-info="${k.id}" data-cur="${k.lv}">${esc(k.n)}</button>${k.k === "group" ? "発動" : k.k === "set" ? `<span class="lvnum" style="font-size:.9rem;color:var(--ink)">Lv${k.lv}<span class="muted small">（${k.pts}部位）</span></span>` : pips(k.lv, k.max)}</div>`).join("");
   const free = s.free.w.length + s.free.a.length ? `<span class="small muted">空き ${slotHtml(s.free.a, s.free.w, true)}</span>` : `<span class="small muted">空きなし</span>`;
   const saveBtn = opts.noSave ? "" : `<button class="mini" data-save="${cards.push({ s, want: req.want }) - 1}">マイセット登録</button>`;
   return `<article class="result"><header><span class="def">${opts.title ? esc(opts.title) : "#" + (idx + 1)} 防御 <b>${s.def}</b></span>${saveBtn}<span class="res">${RES.map((r, k) => `${r}${s.res[k] > 0 ? "+" : ""}${s.res[k]}`).join(" ")}</span>${free}</header>
@@ -459,9 +459,46 @@ function doReset() {
   setStatus("条件をクリアしました。"); $("out").innerHTML = "";
 }
 
+// ---------------------------------------------------------------- スキル説明の吹き出し
+let tipFor = null;
+function hideTip() { $("skillTip").hidden = true; tipFor = null; }
+function showTip(btn) {
+  const id = btn.dataset.info, s = data.skills[id]; if (!s) return;
+  if (tipFor === btn) { hideTip(); return; }
+  tipFor = btn;
+  const cur = +(btn.dataset.cur || state.want[id] || 0);
+  const isSet = s.k === "set" || s.k === "group";
+  const rows = (s.lv || []).map((r) => {
+    const head = isSet ? `${r.pc}部位${r.nm ? `<br><span class="tip-sub">${esc(r.nm)}</span>` : ""}` : `Lv${r.l}`;
+    return `<tr class="${r.l === cur ? "on" : ""}"><th>${head}</th><td>${esc(r.t).replace(/\n/g, "")}</td></tr>`;
+  }).join("");
+  const tip = $("skillTip");
+  tip.innerHTML = `<div class="tip-head"><b>${esc(s.n)}</b><span class="kind">${KIND[s.k]}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
+    ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>`;
+  tip.hidden = false;
+  // クリックした名前のすぐ下（入りきらなければ上）に出す
+  const r = btn.getBoundingClientRect(), tw = Math.min(360, innerWidth - 24);
+  tip.style.width = `${tw}px`;
+  const left = Math.max(12, Math.min(r.left, innerWidth - tw - 12));
+  tip.style.left = `${left}px`;
+  const th = tip.offsetHeight;
+  const below = r.bottom + 8, above = r.top - th - 8;
+  tip.style.top = `${below + th < innerHeight - 8 || above < 8 ? below : above}px`;
+  tip.style.setProperty("--arrow-x", `${Math.max(14, Math.min(r.left + 16 - left, tw - 20))}px`);
+  tip.classList.toggle("up", !(below + th < innerHeight - 8 || above < 8));
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button.info");
+  if (b) { e.stopPropagation(); showTip(b); return; }
+  if (e.target.closest(".tip-x") || !e.target.closest("#skillTip")) hideTip();
+}, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+addEventListener("scroll", hideTip, { passive: true });
+addEventListener("resize", hideTip);
+
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261015c", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));

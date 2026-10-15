@@ -27,7 +27,12 @@ PART = {"head": 0, "chest": 1, "arms": 2, "waist": 3, "legs": 4}
 skills = {}
 for s in load("Skill.json"):
     sid = str(s["game_id"])
-    skills[sid] = {"n": ja(s), "k": s["kind"], "max": len(s.get("ranks") or [1])}
+    txt = lambda v: unicodedata.normalize("NFKC", (v or {}).get("ja", "") if isinstance(v, dict) else (v or "")).replace("\r\n", "\n").strip()
+    skills[sid] = {"n": ja(s), "k": s["kind"], "max": len(s.get("ranks") or [1]),
+                   "d": txt(s.get("descriptions")),
+                   "lv": [{"l": r.get("level"), "t": txt(r.get("descriptions")), **({"nm": txt(r.get("names"))} if r.get("names") else {}),
+                           **({"pc": r["set_pieces_required"]} if r.get("set_pieces_required") else {})}
+                          for r in (s.get("ranks") or [])]}
 
 # --- 防具 ---------------------------------------------------------------
 armors = []
