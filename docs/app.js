@@ -1,6 +1,7 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015c";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015d";
+import { SKILL_NOTES } from "./skill_notes.js?v=20261015d";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -468,13 +469,16 @@ function showTip(btn) {
   tipFor = btn;
   const cur = +(btn.dataset.cur || state.want[id] || 0);
   const isSet = s.k === "set" || s.k === "group";
+  const note = SKILL_NOTES[s.n];
   const rows = (s.lv || []).map((r) => {
     const head = isSet ? `${r.pc}部位${r.nm ? `<br><span class="tip-sub">${esc(r.nm)}</span>` : ""}` : `Lv${r.l}`;
-    return `<tr class="${r.l === cur ? "on" : ""}"><th>${head}</th><td>${esc(r.t).replace(/\n/g, "")}</td></tr>`;
+    const num = note?.lv?.[r.l];
+    return `<tr class="${r.l === cur ? "on" : ""}"><th>${head}</th><td>${esc(r.t).replace(/\n/g, "")}${num ? `<div class="tip-num">${esc(num)}</div>` : ""}</td></tr>`;
   }).join("");
+  const foot = note ? `<div class="tip-foot">${note.note ? `<div>${esc(note.note)}</div>` : ""}${note.disputed ? `<div class="tip-warn">※${esc(note.disputed)}</div>` : ""}<div class="tip-src">数値は検証値（出典：${esc(note.src)}）</div></div>` : "";
   const tip = $("skillTip");
   tip.innerHTML = `<div class="tip-head"><b>${esc(s.n)}</b><span class="kind">${KIND[s.k]}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
-    ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>`;
+    ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>${foot}`;
   tip.hidden = false;
   // クリックした名前のすぐ下（入りきらなければ上）に出す
   const r = btn.getBoundingClientRect(), tw = Math.min(360, innerWidth - 24);
@@ -498,7 +502,7 @@ addEventListener("resize", hideTip);
 
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json?v=20261015c", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261015d", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));
