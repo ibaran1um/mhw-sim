@@ -100,9 +100,12 @@ export class Sim {
     const relPts = (sk) => [...R].map((id) => sk[id] || 0);
     const pad = (sl) => [0, 1, 2].map((i) => sl[i] || 0);
     const parts = [[], [], [], [], []];
+    const allowed = (a) => (fix[a.p] ? fix[a.p] === a.n : !(exclude.has(a.n) || a.r < minR));
+    // ワンセット防具は1部位でも使えなければ一式ごと使わない
+    const bannedSets = new Set(this.data.armors.filter((a) => a.one && !allowed(a)).map((a) => a.s));
     this.data.armors.forEach((a, i) => {
-      if (fix[a.p] && fix[a.p] !== a.n) return;
-      if (!fix[a.p] && (exclude.has(a.n) || a.r < minR)) return;
+      if (!allowed(a)) return;
+      if (a.one && bannedSets.has(a.s)) return;
       const a1 = req.limitBreak ? this._limitBreak(a) : a;
       const a2 = { ...a1, d: this._defense(a, !!req.limitBreak), lb: !!req.limitBreak && a.r >= 5 };
       parts[a.p].push({ i, a: a2, rp: relPts(a2.sk), sl: pad(a2.sl) });
@@ -115,6 +118,7 @@ export class Sim {
       // 支配される防具を除外（関連スキル・スロット・防御力がすべて以下）
       const keep = list.filter((b, bi) => !list.some((a, ai) => {
         if (ai === bi) return false;
+        if (a.a.one || b.a.one) return false; // ワンセット防具は単体で比べられない
         let strict = false;
         for (let k = 0; k < a.rp.length; k++) { if (a.rp[k] < b.rp[k]) return false; if (a.rp[k] > b.rp[k]) strict = true; }
         for (let k = 0; k < 3; k++) { if (a.sl[k] < b.sl[k]) return false; if (a.sl[k] > b.sl[k]) strict = true; }
@@ -172,6 +176,10 @@ export class Sim {
       c.a.res.forEach((r, k) => r && resTerms[k].push([r, v]));
     });
     byPart.forEach((vs, p) => C(`part${p}`, vs.map((v) => [1, v]), "=", 1));
+    // ワンセット防具：同じシリーズの全部位を一緒に選ぶ
+    const oneSets = {};
+    meta.armors.forEach((m) => { if (m.a.one) (oneSets[m.a.s] ||= []).push(m.v); });
+    Object.values(oneSets).forEach((vs, n) => vs.slice(1).forEach((v, k) => C(`one${n}_${k}`, [[1, v], [-1, vs[0]]], "=", 0)));
 
     // 武器
     const w = req.weapon || { sl: [], sk: {} };

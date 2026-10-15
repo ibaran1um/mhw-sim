@@ -1,12 +1,12 @@
 // 計算はWorkerで行い、画面を固めない
-import { Sim } from "./solver.js";
+import { Sim } from "./solver.js?v=20261015e";
 import Module from "./lib/highs.mjs";
 
 const wasmUrl = new URL("./lib/highs.wasm", import.meta.url).href;
 const loadHighs = () => Module({ locateFile: () => wasmUrl });
 let sim = null;
 const ready = (async () => {
-  const data = await (await fetch(new URL("./data.json", import.meta.url))).json();
+  const data = await (await fetch(new URL("./data.json?v=20261015e", import.meta.url))).json();
   sim = new Sim(data, loadHighs);
   await sim.init();
 })();

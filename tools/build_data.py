@@ -34,6 +34,13 @@ for s in load("Skill.json"):
                            **({"pc": r["set_pieces_required"]} if r.get("set_pieces_required") else {})}
                           for r in (s.get("ranks") or [])]}
 
+# --- 素材名 -------------------------------------------------------------
+item_names = {str(i["game_id"]): ja(i) for i in load("Item.json")}
+
+def mats(c):
+    c = c or {}
+    return [[item_names.get(str(k), f"#{k}"), n] for k, n in (c.get("inputs") or {}).items()]
+
 # --- 防具 ---------------------------------------------------------------
 armors = []
 for a in load("Armor.json"):
@@ -48,6 +55,9 @@ for a in load("Armor.json"):
         sk = skills.setdefault(str(gb["skill_id"]), {"n": "?", "k": "group", "max": 1})
         sk["tiers"] = [[r["pieces"], r["skill_level"]] for r in gb["ranks"]]
         sk["max"] = 1
+    # ワンセット防具：1部位だけに素材があり、残りは素材なし（豪鬼αなど）。一式でしか装備できない
+    with_m = [p for p in a["pieces"] if (p.get("crafting") or {}).get("inputs")]
+    one_set = len(a["pieces"]) > 1 and len(with_m) == 1
     for p in a["pieces"]:
         d = p.get("defense") or {}
         r = p.get("resistances") or {}
@@ -60,6 +70,9 @@ for a in load("Armor.json"):
             "res": [r.get(k, 0) for k in ("fire", "water", "thunder", "ice", "dragon")],
             "sl": sorted(p.get("slots") or [], reverse=True),
             "sk": {k: v for k, v in (p.get("skills") or {}).items()},
+            "m": mats(with_m[0]["crafting"] if one_set else p.get("crafting")),
+            "z": (with_m[0] if one_set else p).get("crafting", {}).get("price", 0),
+            **({"one": 1} if one_set else {}),
         })
 
 # --- 装飾品 -------------------------------------------------------------

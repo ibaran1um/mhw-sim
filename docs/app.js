@@ -1,7 +1,7 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015d";
-import { SKILL_NOTES } from "./skill_notes.js?v=20261015d";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015e";
+import { SKILL_NOTES } from "./skill_notes.js?v=20261015e";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -28,7 +28,7 @@ try { const saved = localStorage.getItem(LS); if (saved) { Object.assign(state, 
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* 無視 */ } };
 
 // ---------------------------------------------------------------- Worker
-const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+const worker = new Worker(new URL("./worker.js?v=20261015e", import.meta.url), { type: "module" });
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -212,7 +212,7 @@ function buildReq() {
 // ---------------------------------------------------------------- 結果描画
 function resultCard(s, idx, req, opts = {}) {
   const wantIds = new Set(Object.keys(req.want));
-  const rows = s.armors.map((a) => `<tr><td class="part">${PARTS[a.p]}</td><td class="nm">${esc(a.n)} ${slotHtml(a.sl)}${a.lb ? ` <span class="kind">限界突破</span>` : ""}${a.deco.length ? `<div class="decos">${a.deco.map(esc).join("、")}</div>` : ""}</td>
+  const rows = s.armors.map((a) => `<tr><td class="part">${PARTS[a.p]}</td><td class="nm">${a.n.startsWith("（") ? esc(a.n) : `<button type="button" class="info" data-armor="${esc(a.n)}">${esc(a.n)}</button>`}${data.armors.find((x) => x.n === a.n)?.one ? ` <span class="kind">一式</span>` : ""} ${slotHtml(a.sl)}${a.lb ? ` <span class="kind">限界突破</span>` : ""}${a.deco.length ? `<div class="decos">${a.deco.map(esc).join("、")}</div>` : ""}</td>
     <td class="ops">${a.n.startsWith("（") || opts.noSave ? "" : `<button class="mini" data-fix="${a.p}" data-n="${esc(a.n)}">固定</button> <button class="mini" data-ex="${esc(a.n)}">除外</button>`}</td></tr>`).join("");
   let tal = "";
   if (s.talisman) tal = `<tr><td class="part">護石</td><td colspan="2">${esc(s.talisman.name)} <span class="small muted">${esc(Object.entries(s.talisman.sk).map(([id, l]) => sn(id) + l).join(" / "))}</span> ${slotHtml(s.talisman.sl, s.talisman.wsl)}${s.talisman.deco.length ? `<div class="decos">${s.talisman.deco.map(esc).join("、")}</div>` : ""}</td></tr>`;
@@ -463,7 +463,34 @@ function doReset() {
 // ---------------------------------------------------------------- スキル説明の吹き出し
 let tipFor = null;
 function hideTip() { $("skillTip").hidden = true; tipFor = null; }
+function placeTip(btn) {
+  const tip = $("skillTip");
+  tip.hidden = false;
+  const r = btn.getBoundingClientRect(), tw = Math.min(360, innerWidth - 24);
+  tip.style.width = `${tw}px`;
+  const left = Math.max(12, Math.min(r.left, innerWidth - tw - 12));
+  tip.style.left = `${left}px`;
+  const th = tip.offsetHeight;
+  const below = r.bottom + 8, above = r.top - th - 8;
+  const down = below + th < innerHeight - 8 || above < 8;
+  tip.style.top = `${down ? below : above}px`;
+  tip.style.setProperty("--arrow-x", `${Math.max(14, Math.min(r.left + 16 - left, tw - 20))}px`);
+  tip.classList.toggle("up", !down);
+}
+function showArmorTip(btn) {
+  const a = data.armors.find((x) => x.n === btn.dataset.armor); if (!a) return;
+  if (tipFor === btn) { hideTip(); return; }
+  tipFor = btn;
+  const mats = (a.m || []).map(([n, q]) => `<tr><th>${esc(n)}</th><td class="num">×${q}</td></tr>`).join("");
+  const sks = Object.entries(a.sk).map(([id, l]) => `${esc(sn(id))} ${data.skills[id]?.k === "set" || data.skills[id]?.k === "group" ? "" : "Lv"}${l}`).join("、");
+  $("skillTip").innerHTML = `<div class="tip-head"><b>${esc(a.n)}</b><span class="rar r${Math.min(8, Math.max(5, a.r))}">R${a.r}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
+    <p class="tip-desc">${esc(a.s)}シリーズ${sks ? `／${sks}` : ""}</p>
+    ${a.one ? `<p class="tip-warn" style="margin:0 0 6px">ワンセット防具：5部位一式でしか装備できません。素材は一式分です。</p>` : ""}
+    ${mats ? `<h4 class="tip-h">生産素材</h4><table class="tip-lv tip-mat">${mats}</table><div class="tip-foot"><div>費用 ${(a.z || 0).toLocaleString()}z</div></div>` : `<p class="tip-desc">生産素材なし（初期装備など）</p>`}`;
+  placeTip(btn);
+}
 function showTip(btn) {
+  if (btn.dataset.armor) { showArmorTip(btn); return; }
   const id = btn.dataset.info, s = data.skills[id]; if (!s) return;
   if (tipFor === btn) { hideTip(); return; }
   tipFor = btn;
@@ -479,17 +506,7 @@ function showTip(btn) {
   const tip = $("skillTip");
   tip.innerHTML = `<div class="tip-head"><b>${esc(s.n)}</b><span class="kind">${KIND[s.k]}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
     ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>${foot}`;
-  tip.hidden = false;
-  // クリックした名前のすぐ下（入りきらなければ上）に出す
-  const r = btn.getBoundingClientRect(), tw = Math.min(360, innerWidth - 24);
-  tip.style.width = `${tw}px`;
-  const left = Math.max(12, Math.min(r.left, innerWidth - tw - 12));
-  tip.style.left = `${left}px`;
-  const th = tip.offsetHeight;
-  const below = r.bottom + 8, above = r.top - th - 8;
-  tip.style.top = `${below + th < innerHeight - 8 || above < 8 ? below : above}px`;
-  tip.style.setProperty("--arrow-x", `${Math.max(14, Math.min(r.left + 16 - left, tw - 20))}px`);
-  tip.classList.toggle("up", !(below + th < innerHeight - 8 || above < 8));
+  placeTip(btn);
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button.info");
@@ -502,7 +519,7 @@ addEventListener("resize", hideTip);
 
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json?v=20261015d", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261015e", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));
