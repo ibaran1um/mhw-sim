@@ -1,7 +1,7 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261015e";
-import { SKILL_NOTES } from "./skill_notes.js?v=20261015e";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261016b";
+import { SKILL_NOTES } from "./skill_notes.js?v=20261016b";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -20,7 +20,7 @@ const LS = "mhws-sim-v1";
 const state = {
   want: {}, cat: "all", wType: "", wName: "", wSl: [3, 3, 3], kyo: false, kyoSet: "", kyoGroup: "", kyoCount: 1,
   kyoOff: [], minRar: 1, minDef: "", minRes: ["", "", "", "", ""], useCrafted: true, talismans: [],
-  exclude: [], fix: {}, decoExclude: [], decoLimit: {}, tab: "cond", mysets: [], limitBreak: true,
+  exclude: [], fix: {}, decoExclude: [], decoLimit: {}, tab: "cond", mysets: [], limitBreak: true, mAtk: "", mAf: "", mEl: "", mElV: "",
 };
 const cards = []; // 画面に出した結果（マイセット登録用）
 let firstVisit = true;
@@ -28,7 +28,7 @@ try { const saved = localStorage.getItem(LS); if (saved) { Object.assign(state, 
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* 無視 */ } };
 
 // ---------------------------------------------------------------- Worker
-const worker = new Worker(new URL("./worker.js?v=20261015e", import.meta.url), { type: "module" });
+const worker = new Worker(new URL("./worker.js?v=20261016b", import.meta.url), { type: "module" });
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -71,6 +71,109 @@ function renderWant() {
     ? ids.map((id) => `<span class="chip"><button type="button" class="info" data-info="${id}">${esc(sn(id))}</button> <b>${data.skills[id].k === "group" ? "" : "Lv" + state.want[id]}</b><button data-rm="${id}" aria-label="${esc(sn(id))}を外す">×</button></span>`).join("")
     : `<span class="empty">まだ選んでいません。下の一覧からLvを押して追加します。</span>`;
   $("wantChips").innerHTML = html;
+  renderStats();
+}
+
+// ---------------------------------------------------------------- 攻撃力・会心率・属性の目安
+// ゲーム内のスキル説明の数値。常時＝条件なしで乗るもの、条件＝発動条件つき（最大はすべて発動した場合）
+const EL_JA = { fire: "火", water: "水", thunder: "雷", ice: "氷", dragon: "龍", poison: "毒", paralysis: "麻痺", sleep: "睡眠", blastblight: "爆破" };
+const EL_SKILL = { fire: "火属性攻撃強化", water: "水属性攻撃強化", thunder: "雷属性攻撃強化", ice: "氷属性攻撃強化", dragon: "龍属性攻撃強化" };
+const HEAVY = ["大剣", "ハンマー", "狩猟笛", "ガンランス", "スラッシュアックス", "チャージアックス"];
+// 各スキル：Lvごとに [攻撃×, 攻撃+, 会心%, 属性×, 属性+]。条件つきは cond
+const L = (rows) => (l) => rows[Math.min(l, rows.length) - 1];
+const atk = (xs) => xs.map((a) => [1, a, 0, 1, 0]);
+const crit = (xs) => xs.map((c) => [1, 0, c, 1, 0]);
+const mul = (xs) => xs.map((m) => [m, 0, 0, 1, 0]);
+const ST = {
+  攻撃: { always: 1, f: L([[1, 3, 0, 1, 0], [1, 5, 0, 1, 0], [1, 7, 0, 1, 0], [1.02, 8, 0, 1, 0], [1.04, 9, 0, 1, 0]]) },
+  見切り: { always: 1, f: L(crit([4, 8, 12, 16, 20])) },
+  ヌシの魂: { always: 1, f: L(mul([1.05])) },
+  挑戦者: { f: L([[1, 4, 3, 1, 0], [1, 8, 5, 1, 0], [1, 12, 7, 1, 0], [1, 16, 10, 1, 0], [1, 20, 15, 1, 0]]) },
+  弱点特効: { f: L(crit([8, 15, 25, 35, 50])) }, // 傷口込み
+  渾身: { f: L(crit([10, 20, 30])) },
+  力の解放: { f: L(crit([10, 20, 30, 40, 50])) },
+  逆恨み: { f: L(atk([5, 10, 15, 20, 25])) },
+  巧撃: { f: L(atk([10, 15, 20, 25, 30])) },
+  フルチャージ: { f: L(atk([3, 6, 10, 15, 20])) },
+  逆襲: { f: L(atk([10, 15, 25])) },
+  攻勢: { f: L([[1, 6, 0, 1, 0], [1, 8, 5, 1, 0], [1, 10, 10, 1, 0], [1, 12, 15, 1, 0], [1, 15, 20, 1, 0]]) },
+  攻めの守勢: { f: L(mul([1.05, 1.1, 1.15])) },
+  急襲: { f: L(mul([1.05, 1.1, 1.15])) },
+  火事場力: { f: L(mul([1, 1.05, 1.05, 1.1, 1.3])) },
+  連撃: { f: (l, t) => {
+    const big = ["大剣", "狩猟笛"].includes(t), gun = ["ライトボウガン", "ヘビィボウガン"].includes(t);
+    const a = (big ? [10, 12, 14, 16, 18] : gun || t === "弓" ? [6, 7, 8, 9, 10] : [8, 10, 12, 15, 18])[l - 1];
+    const e = gun ? 0 : (big ? [80, 100, 120, 160, 200] : ["双剣", "弓"].includes(t) ? [40, 60, 80, 100, 120] : [60, 80, 100, 120, 140])[l - 1];
+    return [1, a, 0, 1, e];
+  } },
+  属性吸収: { f: (l, t) => [1, 0, 0, 1, (t === "大剣" ? [50, 80, 100] : ["双剣", "弓"].includes(t) ? [30, 40, 50] : [40, 50, 60])[l - 1]] },
+  災禍転福: { f: (l, t) => [1, 0, 0, (HEAVY.includes(t) ? [1.1, 1.2, 1.3] : [1.05, 1.1, 1.15])[l - 1], 0] },
+  暗器蛸の力: { f: L(atk([15, 30])) },
+  闢獣の力: { f: L(atk([10, 25])) },
+  兇爪竜の力: { f: L(atk([8, 18])) },
+  黒蝕竜の力: { f: L(atk([0, 15])) },
+  凍峰竜の反逆: { f: L(atk([25, 50])) },
+  雪獅子の闘志: { f: L(atk([3, 6])) },
+  海竜の渦雷: { f: L(crit([15, 15])) },
+  巨戟龍の黙示録: { f: L([[1, 0, 0, 1.2, 20], [1, 0, 0, 1.3, 40]]) },
+  暗黒騎士の証: { f: (l, t) => [1, 0, 0, ["大剣", "ハンマー", "狩猟笛"].includes(t) ? 1.2 : 1.14, 0] },
+  ヌシの憤激: { f: L(atk([10])) },
+  ヌシの誇り: { f: L(atk([10])) },
+  革細工の滑性: { f: L(crit([30])) },
+};
+// 攻撃・会心・属性に関わるが、数値が未検証／目安のみ／交互発動などで合計に入れないもの
+const ST_VAGUE = ["抜刀術【技】", "抜刀術【力】", "無我の境地", "濡れ刃紋", "属性変換", "オメガレゾナンス", "千刃竜の闘志", "花舞の祈り", "踊火の祈り", "祝謡の祈り", "夢灯の祈り", "毛皮の昂揚", "パワーストーン", "フォースショット"];
+const lvOf = (name, lvs) => lvs[name] || 0;
+function renderStats() {
+  const w = curWeapon();
+  const num = (v) => (v === "" || v == null || isNaN(+v) ? null : +v);
+  const base = w ? { atk: w.atk, af: w.af || 0, el: (w.el || []).filter((e) => !e[2]) } : {
+    atk: num(state.mAtk), af: num(state.mAf) ?? 0, el: state.mEl && num(state.mElV) ? [[state.mEl, num(state.mElV)]] : [],
+  };
+  // 有効Lv＝指定Lvと武器に付いているLvの大きい方
+  const lvs = {};
+  for (const [id, l] of Object.entries(state.want)) if (l > 0 && usable(id)) lvs[sn(id)] = Math.max(lvs[sn(id)] || 0, data.skills[id].k === "set" ? l : l);
+  for (const [id, l] of Object.entries(w?.sk || {})) lvs[sn(id)] = Math.max(lvs[sn(id)] || 0, l);
+  const acc = (cond) => {
+    let m = 1, a = 0, c = 0, em = 1, ea = 0;
+    for (const [n, def] of Object.entries(ST)) {
+      const l = lvOf(n, lvs); if (!l || (!def.always && !cond)) continue;
+      const v = def.f(l, state.wType); m *= v[0]; a += v[1]; c += v[2]; em *= v[3]; ea += v[4];
+    }
+    return { m, a, c, em, ea };
+  };
+  const A = acc(false), M = acc(true);
+  const clamp = (c) => Math.max(-100, Math.min(100, c));
+  const atkTxt = (r) => base.atk != null ? Math.round(base.atk * r.m + r.a) : `+${r.a}${r.m !== 1 ? ` ×${+r.m.toFixed(3)}` : ""}`;
+  const out = [];
+  out.push(`<div class="st"><span>攻撃</span><b>${atkTxt(A)}</b>${M.m !== A.m || M.a !== A.a ? `<span>→ 最大 <span class="mx">${atkTxt(M)}</span></span>` : ""}</div>`);
+  const afA = clamp(base.af + A.c), afM = clamp(base.af + M.c);
+  out.push(`<div class="st"><span>会心率</span><b>${afA}%</b>${afM !== afA ? `<span>→ 最大 <span class="mx">${afM}%</span></span>` : ""}</div>`);
+  // 会心時の倍率
+  const sc = lvOf("超会心", lvs), ec = lvOf("会心撃【属性】", lvs);
+  const rawCrit = sc ? [1.28, 1.31, 1.34, 1.37, 1.4][sc - 1] : 1.25;
+  const elCrit = ec ? (HEAVY.includes(state.wType) ? [1.07, 1.13, 1.2] : [1.05, 1.1, 1.15])[ec - 1] : 1;
+  // 属性
+  const elOne = (t, v) => {
+    const sk = EL_SKILL[t]; const l = sk ? lvOf(sk, lvs) : 0;
+    const [m0, a0] = l ? [[1, 40], [1.1, 50], [1.2, 60]][l - 1] : [1, 0];
+    const st = !!EL_SKILL[t]; // 状態異常属性には条件スキルを掛けない
+    const now = Math.round(v * m0 + a0);
+    const max = st ? Math.round(v * m0 * M.em + a0 + M.ea) : now;
+    return `${EL_JA[t] || t} <b>${now}</b>${l ? `<span class="small muted fx">（${v}${m0 !== 1 ? `×${m0}` : ""}+${a0}）</span>` : ""}${max !== now ? `<span>→ 最大 <span class="mx">${max}</span></span>` : ""}`;
+  };
+  const elRows = base.el.length ? base.el.map(([t, v]) => elOne(t, v)) : (() => {
+    const ls = Object.entries(EL_SKILL).filter(([, n]) => lvOf(n, lvs));
+    return ls.length ? ls.map(([t, n]) => { const l = lvOf(n, lvs); const [m0, a0] = [[1, 40], [1.1, 50], [1.2, 60]][l - 1]; return `${EL_JA[t]} <b>${m0 !== 1 ? `×${m0} ` : ""}+${a0}</b>`; }) : ["<b>なし</b>"];
+  })();
+  out.push(`<div class="st"><span>属性</span>${elRows.join(" ")}</div>`);
+  out.push(`<div class="st"><span>会心倍率</span>物理 <b>×${rawCrit}</b> 属性 <b>×${elCrit}</b></div>`);
+  const vague = ST_VAGUE.filter((n) => lvOf(n, lvs));
+  const notes = [];
+  if (base.atk == null) notes.push("武器欄に攻撃力を入れると実数で表示");
+  if (vague.length) notes.push(`数値未反映：${vague.join("・")}`);
+  if (w && (w.el || []).some((e) => e[2])) notes.push("隠し属性は含みません");
+  $("wantStats").innerHTML = out.join("") + (notes.length ? `<div class="note">${esc(notes.join(" ／ "))}</div>` : "");
 }
 function renderSkillList() {
   const q = $("skillQ").value.trim();
@@ -119,6 +222,10 @@ function renderWeapon() {
   // 生産武器のスロットは表示だけ。手入力のスロット設定は残しておく
   const shown = w ? [0, 1, 2].map((i) => w.sl[i] || 0) : state.wSl;
   ["wS0", "wS1", "wS2"].forEach((id, i) => { optList($(id), [[0, "－"], [1, "[1]"], [2, "[2]"], [3, "[3]"]], shown[i] || 0); $(id).disabled = !!w; });
+  $("manualStats").hidden = !!w;
+  $("mAtk").value = state.mAtk; $("mAf").value = state.mAf; $("mElV").value = state.mElV;
+  optList($("mEl"), [["", "属性なし"], ...Object.entries(EL_JA).map(([k, v]) => [k, v])], state.mEl);
+  $("mElV").hidden = !state.mEl;
   $("wSkills").textContent = w && Object.keys(w.sk).length ? "武器スキル: " + Object.entries(w.sk).map(([id, l]) => `${sn(id)}${l}`).join("・") : "";
   // 巨戟アーティアは手入力のときだけ。生産武器では使わない
   const kyoOn = state.kyo && !w;
@@ -383,6 +490,7 @@ function bind() {
   });
   $("wType").addEventListener("change", () => { state.wType = $("wType").value; state.wName = ""; renderWeapon(); renderWant(); renderSkillList(); save(); });
   $("wSel").addEventListener("change", () => { state.wName = $("wSel").value; renderWeapon(); renderWant(); renderSkillList(); save(); });
+  ["mAtk", "mAf", "mEl", "mElV"].forEach((id) => $(id).addEventListener("input", () => { state[id] = $(id).value; if (id === "mEl") $("mElV").hidden = !state.mEl; renderStats(); save(); }));
   ["wS0", "wS1", "wS2"].forEach((id, i) => $(id).addEventListener("change", () => { state.wSl[i] = +$(id).value; state.wSl.sort((a, b) => b - a); renderWeapon(); save(); }));
   $("kyo").addEventListener("change", () => { state.kyo = $("kyo").checked; renderWeapon(); save(); });
   $("kyoSet").addEventListener("change", () => { state.kyoSet = $("kyoSet").value; save(); });
@@ -502,7 +610,8 @@ function showTip(btn) {
     const num = note?.lv?.[r.l];
     return `<tr class="${r.l === cur ? "on" : ""}"><th>${head}</th><td>${esc(r.t).replace(/\n/g, "")}${num ? `<div class="tip-num">${esc(num)}</div>` : ""}</td></tr>`;
   }).join("");
-  const foot = note ? `<div class="tip-foot">${note.note ? `<div>${esc(note.note)}</div>` : ""}${note.disputed ? `<div class="tip-warn">※${esc(note.disputed)}</div>` : ""}<div class="tip-src">数値は検証値（出典：${esc(note.src)}）</div></div>` : "";
+  const foot = note?.none ? `<div class="tip-foot"><div class="tip-src">具体的な数値の検証資料は見つかりませんでした（ゲーム内の表記のみ）</div></div>`
+    : note ? `<div class="tip-foot">${note.note ? `<div>${esc(note.note)}</div>` : ""}${note.disputed ? `<div class="tip-warn">※${esc(note.disputed)}</div>` : ""}<div class="tip-src">数値は検証値（出典：${esc(note.src)}）</div></div>` : "";
   const tip = $("skillTip");
   tip.innerHTML = `<div class="tip-head"><b>${esc(s.n)}</b><span class="kind">${KIND[s.k]}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
     ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>${foot}`;
@@ -519,7 +628,7 @@ addEventListener("resize", hideTip);
 
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json?v=20261015e", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261016b", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));

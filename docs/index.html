@@ -235,6 +235,18 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 .skill-grid .skill-row:last-child { border-bottom: 1px solid var(--line); }
 .skill-grid .skill-row.picked { border: 2px solid var(--brass); background: var(--brass-soft); padding: 4px 5px 4px 9px; }
 /* 固定した「発動させたいスキル」欄：下端を太線＋影で区切る */
+.stats { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: .9rem; }
+.stats .st { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.stats .st > span:first-child { color: var(--muted); font-size: .8rem; }
+.stats b { font-family: var(--font-num); font-size: 1.1rem; }
+.stats .mx { color: var(--brass); font-weight: 700; font-family: var(--font-num); }
+.stats .note { flex-basis: 100%; color: var(--muted); font-size: .75rem; }
+@media (max-width: 860px) {
+  .stats { margin-top: 6px; padding-top: 6px; font-size: .8rem; gap: 2px 14px; }
+  .stats b { font-size: .95rem; }
+  .stats .note { font-size: .68rem; }
+  .stats .fx { display: none; }
+}
 .want-sticky { border-bottom: 4px solid var(--brass); box-shadow: 0 6px 10px -4px rgba(0, 0, 0, .25); margin-bottom: 10px; }
 .want-sticky h2 { border-bottom: 0; padding-bottom: 0; }
 
@@ -298,6 +310,13 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
             <select id="wS2" aria-label="武器スロット3"></select>
             <span id="wSkills" class="small muted"></span>
           </div>
+          <div class="row" id="manualStats">
+            <span class="muted small">性能</span>
+            <label class="small">攻撃 <input type="number" id="mAtk" min="0" max="400" inputmode="numeric" style="width:5em"></label>
+            <label class="small">会心 <input type="number" id="mAf" min="-100" max="100" inputmode="numeric" style="width:4em">%</label>
+            <select id="mEl" aria-label="属性"></select>
+            <input type="number" id="mElV" min="0" max="1000" step="10" inputmode="numeric" style="width:5em" aria-label="属性値">
+          </div>
           <label class="chk"><input type="checkbox" id="kyo"> 巨戟アーティア（シリーズ＋グループを1つずつ付与）</label>
           <div id="kyoBox" class="stack" hidden>
             <div class="row">
@@ -340,6 +359,7 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
       <div class="want-sticky">
         <h2>発動させたいスキル</h2>
         <div class="chips" id="wantChips"></div>
+        <div class="stats" id="wantStats"></div>
       </div>
       <div class="row" style="margin-top:10px">
         <input type="search" id="skillQ" class="grow" placeholder="スキル名で絞り込み">
@@ -415,6 +435,6 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
   データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
 </footer>
 <div id="skillTip" class="skill-tip" role="tooltip" hidden></div>
-<script type="module" src="./app.js?v=20261015e"></script>
+<script type="module" src="./app.js?v=20261016b"></script>
 </body>
 </html>

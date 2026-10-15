@@ -112,7 +112,9 @@ for f in sorted((src / "weapons").glob("*.json")):
         t = TYPE_JA.get(w["kind"], w["kind"])
         weapons.setdefault(t, []).append({
             "n": ja(w), "r": w["rarity"], "sl": sorted(w.get("slots") or [], reverse=True),
-            "sk": w.get("skills") or {}, "atk": w.get("attack_raw", 0),
+            "sk": w.get("skills") or {}, "atk": w.get("attack_raw", 0), "af": w.get("affinity", 0),
+            **({"el": [[e.get("element") or e.get("status"), (e.get("raw") or 0) * 10, 1 if e.get("hidden") else 0]
+                       for e in (w.get("specials") or [])]} if w.get("specials") else {}),
         })
 
 for sid, s in skills.items():
