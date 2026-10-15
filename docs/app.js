@@ -1,5 +1,6 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
+import { SKILL_CATEGORIES } from "./skill_categories.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -10,7 +11,7 @@ const RES = ["火", "水", "雷", "氷", "龍"];
 let data = null;
 let skillsSorted = [];
 let obtainable = new Set();
-const decoLv = {}; // スキル → そのスキルだけが付く装飾品の最小スロットLv // 防具・装飾品・護石・シリーズ/グループで付けられるスキル
+const decoLvs = {}; // スキル → そのスキルだけが付く装飾品のスロットLv一覧 // 防具・装飾品・護石・シリーズ/グループで付けられるスキル
 const curWeapon = () => (data.weapons[state.wType] || []).find((x) => x.n === state.wName) || null;
 // 武器固有スキル（その武器にしか付かない）は、選んだ武器が持っているときだけ扱う
 const usable = (id) => obtainable.has(id) || !!curWeapon()?.sk?.[id];
@@ -77,23 +78,31 @@ function renderSkillList() {
     const levels = s.k === "group" ? [1] : Array.from({ length: s.max }, (_, i) => i + 1);
     const label = (l) => (s.k === "set" ? ["", "Ⅰ", "Ⅱ", "Ⅲ"][l] || l : s.k === "group" ? "発動" : l);
     const own = !obtainable.has(s.id) ? `<span class="kind">この武器のみ</span>` : "";
-    return `<div class="skill-row${cur ? " picked" : ""}"><span class="nm">${esc(s.n)}</span>${own}
+    // 付けられる装飾品のスロット（例：集中 ①②③）
+    const lvs = [...(decoLvs[s.id] || [])].sort();
+    const slots = lvs.length ? `<span class="slots deco-slots" title="装飾品のスロット">${lvs.map((l) => `<span class="slot${s.k === "weapon" ? " w" : ""}">${l}</span>`).join("")}</span>` : "";
+    return `<div class="skill-row${cur ? " picked" : ""}"><span class="nm">${esc(s.n)}${slots}</span>${own}
       <span class="lv">${levels.map((l) => `<button class="${cur === l ? "on" : ""}" data-sk="${s.id}" data-lv="${l}">${label(l)}</button>`).join("")}</span></div>`;
   };
-  // 武器・防具スキルは「装飾品のスロットLv」ごとに分ける
-  const sub = (k, lv) => {
-    const icon = (n) => `<span class="slot${k === "weapon" ? " w" : ""}">${n}</span>`;
-    return lv ? `${icon(lv)} スロット${lv}の装飾品で付く` : "装飾品なし（防具・武器・護石のみ）";
-  };
+  const visible = (s) => usable(s.id) && (!q || s.n.includes(q));
+  const byName = Object.fromEntries(skillsSorted.map((s) => [s.n, s]));
+  const used = new Set();
+  const block = (title, list) => list.length ? `<div class="skill-sub"><h4>${esc(title)}</h4><div class="skill-grid">${list.map(row).join("")}</div></div>` : "";
   const html = ["weapon", "armor", "set", "group"].map((k) => {
-    const rows = skillsSorted.filter((s) => s.k === k && usable(s.id) && (!q || s.n.includes(q)));
-    if (!rows.length) return "";
-    if (k === "set" || k === "group") return `<div><h3>${KIND[k]}スキル</h3><div class="skill-grid">${rows.map(row).join("")}</div></div>`;
-    const parts = [3, 2, 1, 0].map((lv) => {
-      const rs = rows.filter((s) => (decoLv[s.id] || 0) === lv);
-      return rs.length ? `<div class="skill-sub"><h4>${sub(k, lv)}<span class="cnt">${rs.length}</span></h4><div class="skill-grid">${rs.map(row).join("")}</div></div>` : "";
-    }).join("");
-    return `<div><h3>${KIND[k]}スキル</h3>${parts}</div>`;
+    if (k === "set" || k === "group") {
+      const rows = skillsSorted.filter((s) => s.k === k && visible(s));
+      return rows.length ? `<div><h3>${KIND[k]}スキル</h3><div class="skill-grid">${rows.map(row).join("")}</div></div>` : "";
+    }
+    const parts = SKILL_CATEGORIES.filter((c) => c.kind === k).map((c) => {
+      const list = c.skills.map((n) => byName[n]).filter((s) => s && s.k === k);
+      list.forEach((s) => used.add(s.id));
+      return block(c.name, list.filter(visible));
+    });
+    // 分類に無いもの（武器固有スキルなど）
+    const rest = skillsSorted.filter((s) => s.k === k && !used.has(s.id) && visible(s));
+    parts.push(block(k === "weapon" ? "武器固有・その他" : "その他", rest));
+    const body = parts.join("");
+    return body ? `<div><h3>${KIND[k]}スキル</h3>${body}</div>` : "";
   }).join("");
   $("skillList").innerHTML = html || `<div class="empty">該当するスキルがありません。</div>`;
 }
@@ -458,7 +467,7 @@ function doReset() {
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));
   for (const a of data.armors) for (const id in a.sk) obtainable.add(id);
   for (const d of data.decos) for (const id in d.sk) obtainable.add(id);
-  for (const d of data.decos) { const ids = Object.keys(d.sk); if (ids.length === 1) decoLv[ids[0]] = Math.min(decoLv[ids[0]] || 9, d.lv); }
+  for (const d of data.decos) { const ids = Object.keys(d.sk); if (ids.length === 1) (decoLvs[ids[0]] ||= new Set()).add(d.lv); }
   for (const t of data.amulets) for (const id in t.sk) obtainable.add(id);
   for (const s of skillsSorted) if (s.k === "set" || s.k === "group") obtainable.add(s.id);
   for (const g of Object.values(TALISMAN_GROUPS)) for (const [n] of g.list) { const s = skillsSorted.find((x) => x.n === n.normalize("NFKC")); if (s) obtainable.add(s.id); }
