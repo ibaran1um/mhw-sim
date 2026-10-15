@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="モンスターハンターワイルズのスキルシミュレータ。巨戟アーティアのシリーズ切替チェック、鑑定護石の提案、限界突破に対応。">
+<title>MHWs スキルシミュ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* 加工屋の作業台：左に条件（入力）、右に検索結果。スマホでは上部タブで切替 */
+:root {
+  --bg: #eef0f2;          /* 鉄板の地 */
+  --panel: #ffffff;
+  --ink: #1d2430;
+  --muted: #485162;
+  --line: #c7ccd4;
+  --on-brass: #ffffff;    /* 真鍮地の上の文字 */
+  --brass: #a2681a;       /* 真鍮：主アクセント */
+  --brass-soft: #f4e6cf;
+  --ok: #2f7a4b;
+  --ok-soft: #dcefe3;
+  --ng: #a83a32;
+  --ng-soft: #f5dfdc;
+  --wslot: #6b4fa3;       /* 武器スロット */
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181f; --panel: #1c222b; --ink: #eef1f5; --muted: #b0b8c4; --line: #3a4350;
+    --brass: #d9a24f; --brass-soft: #3a2f1e; --ok: #6cc78f; --ok-soft: #1e3427; --ng: #e6857c; --ng-soft: #3d2422;
+    --wslot: #b49cec; --on-brass: #1a1408; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14181f; --panel: #1c222b; --ink: #eef1f5; --muted: #b0b8c4; --line: #3a4350;
+  --brass: #d9a24f; --brass-soft: #3a2f1e; --ok: #6cc78f; --ok-soft: #1e3427; --ng: #e6857c; --ng-soft: #3d2422;
+  --wslot: #b49cec; --on-brass: #1a1408; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 40px;
+}
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; margin: 0; letter-spacing: .02em; }
+h2 { font-size: .8rem; letter-spacing: .12em; color: var(--muted); margin: 0 0 8px; font-weight: 700; }
+h3 { font-size: 1rem; margin: 0; }
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1280px; margin: 0 auto 10px; }
+.top small { color: var(--muted); }
+.tabs { display: flex; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 6px; gap: 6px; max-width: 1280px; margin: 0 auto; }
+.tabs button { flex: 1; }
+.layout { max-width: 1280px; margin: 0 auto; }
+.pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.layout[data-tab="search"] .pane:not([data-pane="search"]),
+.layout[data-tab="own"] .pane:not([data-pane="own"]),
+.layout[data-tab="myset"] .pane:not([data-pane="myset"]) { display: none; }
+section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+/* 発動スキル：種別ごとの見出し＋多列グリッド（中でスクロールさせない） */
+.skill-groups { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+.skill-groups h3 { font-size: .85rem; color: var(--muted); margin: 0 0 4px; letter-spacing: .06em; }
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 0 14px; }
+.skill-grid .skill-row { border-bottom: 1px solid var(--line); padding: 4px 2px; }
+.skill-row.picked .nm { font-weight: 700; color: var(--brass); }
+#resultActions { position: sticky; bottom: 0; z-index: 4; box-shadow: 0 -4px 12px rgba(0,0,0,.06); padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+#resultActions .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+#resultActions .actions .primary { grid-column: 1 / -1; min-height: 40px; font-size: 1rem; }
+@media (min-width: 861px) {
+  #resultActions .actions { grid-template-columns: 1.6fr repeat(4, auto); }
+  #resultActions .actions .primary { grid-column: auto; min-height: 36px; font-size: inherit; }
+}
+@media (max-width: 860px) {
+  #resultActions { padding-top: 8px; }
+  #resultActions .actions { grid-template-columns: 1fr 1fr; }
+  #resultActions .actions .primary { grid-column: auto; min-height: 38px; }
+  #resultActions .actions button { font-size: .8rem; padding: 6px 4px; min-height: 38px; }
+  #resultActions .actions .primary { font-size: .95rem; }
+}
+.myset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+button, select, input { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 12px; cursor: pointer; min-height: 36px;
+}
+button:hover { border-color: var(--brass); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+button.primary { background: var(--brass); color: #fff; border-color: var(--brass); font-weight: 700; }
+:root[data-theme="dark"] button.primary { color: #1a1408; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #1a1408; } }
+button.on { background: var(--brass-soft); border-color: var(--brass); }
+button[disabled] { opacity: .5; cursor: progress; }
+button.mini { min-height: 28px; padding: 2px 8px; font-size: .8rem; }
+select, input[type=number], input[type=text], input[type=search] {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-height: 34px; min-width: 0;
+}
+input[type=number] { width: 4.5em; font-family: var(--font-num); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.grow { flex: 1 1 140px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: .8rem; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+/* スキル選択 */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px 2px 10px; background: var(--bg); font-size: .85rem; }
+.chip b { font-family: var(--font-num); color: var(--brass); }
+.chip button { border: 0; min-height: 24px; padding: 0 6px; background: none; }
+.skill-list { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.skill-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.skill-row:last-child { border-bottom: 0; }
+.skill-row .nm { flex: 1; min-width: 0; }
+.kind { font-size: .7rem; border-radius: 4px; padding: 0 5px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.lv { display: inline-flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+.lv button { min-height: 28px; min-width: 28px; padding: 0 4px; font-family: var(--font-num); font-size: .8rem; }
+
+/* スロット記号 */
+.slots { display: inline-flex; gap: 2px; font-family: var(--font-num); }
+.slot { display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%; border: 1.5px solid var(--ink); font-size: .72rem; line-height: 1; }
+.slot.w { border-radius: 3px; border-color: var(--wslot); color: var(--wslot); }
+.slot.free { border-style: dashed; color: var(--muted); border-color: var(--muted); }
+
+/* 結果 */
+.status { padding: 10px 12px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.status.ok { background: var(--ok-soft); border-color: var(--ok); }
+.status.ng { background: var(--ng-soft); border-color: var(--ng); }
+.result { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.result > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.def { font-family: var(--font-num); }
+.def b { font-size: 1.1rem; }
+.res { font-family: var(--font-num); font-size: .78rem; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.gear { width: 100%; border-collapse: collapse; }
+.gear td { padding: 5px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.gear td.part { width: 2.5em; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.gear td.nm { min-width: 0; }
+.gear td.ops { width: 1%; white-space: nowrap; text-align: right; }
+.decos { font-size: .8rem; color: var(--muted); }
+.sk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 14px; padding: 8px 12px 10px; }
+.sk { display: flex; justify-content: space-between; gap: 8px; font-size: .85rem; }
+.sk.want { font-weight: 700; }
+.pips { font-family: var(--font-num); letter-spacing: -1px; color: var(--brass); white-space: nowrap; }
+.pips i { font-style: normal; color: var(--line); }
+.lvnum { font-size: .72rem; color: var(--muted); letter-spacing: 0; }
+.tag-set { color: var(--wslot); }
+.list-scroll { overflow-x: auto; }
+.okng { display: flex; flex-wrap: wrap; gap: 6px; }
+.okng span { border-radius: 4px; padding: 2px 8px; font-size: .82rem; border: 1px solid var(--line); }
+.okng .y { background: var(--ok-soft); border-color: var(--ok); color: var(--ink); }
+.okng .n { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.tal { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); }
+.tal .nm { font-weight: 700; }
+.rar { font-family: var(--font-num); font-size: .75rem; padding: 0 6px; border-radius: 4px; color: #fff; }
+.r5 { background: #3f8f57; } .r6 { background: #2f6fae; } .r7 { background: #7b4fb5; } .r8 { background: #b7792a; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+details summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 10px; margin-top: 6px; font-size: .82rem; }
+.empty { color: var(--muted); font-size: .85rem; padding: 6px 0; }
+.bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--brass); width: 0; transition: width .2s; }
+footer.note { max-width: 1280px; margin: 16px auto 0; color: var(--muted); font-size: .75rem; }
+@media (prefers-reduced-motion: reduce) { .bar > div { transition: none; } }
+
+/* ---- 視認性の調整 ---- */
+body { font-size: 15px; line-height: 1.6; }
+h2 { font-size: 1.02rem; color: var(--ink); letter-spacing: .04em; padding-bottom: 6px; border-bottom: 2px solid var(--line); margin-bottom: 10px; }
+.tabs button { font-size: 1rem; font-weight: 700; min-height: 42px; }
+.tabs button.on { background: var(--brass); border-color: var(--brass); color: var(--on-brass); }
+button.primary { color: var(--on-brass); }
+button.on { background: var(--brass); border-color: var(--brass); color: var(--on-brass); font-weight: 700; }
+/* 発動スキル一覧 */
+.skill-groups h3 { font-size: .95rem; color: var(--ink); background: var(--bg); padding: 4px 10px; border-radius: 4px; margin-bottom: 6px; letter-spacing: .04em; }
+.skill-grid .skill-row { padding: 5px 4px; }
+.skill-sub { margin: 6px 0 12px; }
+.skill-sub h4 { display: flex; align-items: center; gap: 8px; font-size: .88rem; margin: 0 0 4px; padding: 2px 4px; color: var(--ink); }
+.skill-sub h4 .cnt { margin-left: auto; font-family: var(--font-num); font-size: .75rem; color: var(--muted); font-weight: 400; }
+.skill-row:hover { background: var(--bg); }
+.skill-row.picked { background: var(--brass-soft); }
+.skill-row.picked .nm { color: var(--ink); font-weight: 700; }
+.lv button { min-height: 32px; min-width: 32px; font-size: .88rem; }
+.chip { font-size: .95rem; padding: 4px 4px 4px 12px; background: var(--brass-soft); border-color: var(--brass); }
+.chip b { color: var(--ink); }
+.kind { font-size: .75rem; }
+/* 結果 */
+.status { font-size: 1rem; }
+.result > header { padding: 10px 12px; }
+.def b { font-size: 1.4rem; }
+.res { font-size: .85rem; }
+.gear td { padding: 7px 12px; }
+.gear td.part { font-weight: 700; color: var(--ink); font-size: .85rem; }
+.gear td.nm { font-weight: 500; }
+.decos { font-size: .85rem; }
+.decos::before { content: "装飾品 "; color: var(--muted); font-size: .75rem; }
+.slot { width: 1.6em; height: 1.6em; font-size: .78rem; }
+.sk-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 18px; padding: 10px 12px 12px; }
+.sk { font-size: .92rem; }
+.sk.want span:first-child { font-weight: 700; }
+.pips { font-size: 1rem; }
+.lvnum { font-size: .8rem; }
+.tal .nm { font-size: 1.05rem; }
+.small { font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>MHWs スキルシミュ</h1>
+  <small id="dataInfo">データ読み込み中…</small>
+</div>
+<nav class="tabs" aria-label="表示切替">
+  <button class="on" data-tab="search">検索</button>
+  <button data-tab="own">所持・除外</button>
+  <button data-tab="myset">マイセット</button>
+</nav>
+
+<main class="layout" id="layout" data-tab="search">
+  <!-- 1タブ目：武器・防具条件 → 発動スキル → 検索結果 -->
+  <div class="pane" data-pane="search">
+    <div class="pair">
+      <section class="box">
+        <h2>武器</h2>
+        <div class="stack">
+          <div class="row">
+            <select id="wType" class="grow" aria-label="武器種"></select>
+            <select id="wSel" class="grow" aria-label="武器"></select>
+          </div>
+          <div class="row">
+            <span class="muted small">スロット</span>
+            <select id="wS0" aria-label="武器スロット1"></select>
+            <select id="wS1" aria-label="武器スロット2"></select>
+            <select id="wS2" aria-label="武器スロット3"></select>
+            <span id="wSkills" class="small muted"></span>
+          </div>
+          <label class="chk"><input type="checkbox" id="kyo"> 巨戟アーティア（シリーズ＋グループを1つずつ付与）</label>
+          <div id="kyoBox" class="stack" hidden>
+            <div class="row">
+              <label class="small muted" for="kyoSet">シリーズ</label>
+              <select id="kyoSet" class="grow"></select>
+            </div>
+            <div class="row">
+              <label class="small muted" for="kyoGroup">グループ</label>
+              <select id="kyoGroup" class="grow"></select>
+            </div>
+            <div class="row small">
+              <label for="kyoCount" class="muted">付与分を何部位として数えるか</label>
+              <input type="number" id="kyoCount" min="1" max="4" value="1">
+            </div>
+            <details>
+              <summary>付与されうる候補（チェックを外すと切替チェックの対象外）</summary>
+              <div class="pool" id="kyoPool"></div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="box">
+        <h2>防具の条件</h2>
+        <div class="stack">
+          <div class="row">
+            <label class="small muted" for="minRar">最低レア</label>
+            <select id="minRar"></select>
+            <label class="small muted" for="minDef">防御力</label>
+            <input type="number" id="minDef" min="0" step="10" placeholder="下限">
+          </div>
+          <div class="row small" id="resRow"></div>
+          <label class="chk"><input type="checkbox" id="useCrafted" checked> 製作できる護石も候補に入れる</label>
+          <label class="chk"><input type="checkbox" id="limitBreak" checked> 限界突破済みとして計算（レア5・6防具のスロットが増える）</label>
+        </div>
+      </section>
+    </div>
+
+    <section class="box">
+      <h2>発動させたいスキル</h2>
+      <div class="chips" id="wantChips"></div>
+      <div class="row" style="margin-top:10px">
+        <input type="search" id="skillQ" class="grow" placeholder="スキル名で絞り込み">
+      </div>
+      <div id="skillList" class="skill-groups"></div>
+    </section>
+
+    <section class="stack" id="resultArea" aria-label="検索結果">
+      <h2 style="margin:4px 0 0">検索結果</h2>
+      <div class="status" id="status">スキルを選んで「検索」を押してください。</div>
+      <div id="out" class="stack"></div>
+    </section>
+
+    <section class="box" id="resultActions" aria-label="操作">
+      <div class="actions">
+        <button class="primary" data-act="search">検索</button>
+        <button data-act="add">追加スキル検索</button>
+        <button data-act="suggest">あれば成立する護石</button>
+        <button data-act="kyo" hidden>巨戟の切替チェック</button>
+        <button data-act="reset">条件をクリア</button>
+      </div>
+      <div class="bar" style="margin-top:8px"><div id="prog"></div></div>
+    </section>
+  </div>
+
+  <!-- 2タブ目：固定・除外、装飾品の所持数、所持護石 -->
+  <div class="pane" data-pane="own">
+    <section class="box">
+      <h2>固定・除外した防具</h2>
+      <div id="fixList" class="stack"></div>
+    </section>
+
+
+    <section class="box">
+      <h2>所持している護石</h2>
+      <div class="stack" id="talList"></div>
+      <details style="margin-top:10px" open>
+        <summary>護石を追加</summary>
+        <div class="stack" style="margin-top:8px">
+          <div class="row"><select id="tk0" class="grow"></select><select id="tl0"></select></div>
+          <div class="row"><select id="tk1" class="grow"></select><select id="tl1"></select></div>
+          <div class="row"><select id="tk2" class="grow"></select><select id="tl2"></select></div>
+          <div class="row">
+            <span class="small muted">スロット</span>
+            <select id="tws" aria-label="武器スロット"><option value="0">武器なし</option><option value="1">武器[1]</option></select>
+            <select id="ts0" aria-label="防具スロット1"></select>
+            <select id="ts1" aria-label="防具スロット2"></select>
+            <select id="ts2" aria-label="防具スロット3"></select>
+          </div>
+          <button id="talAdd">護石を登録</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="box">
+      <h2>装飾品</h2>
+      <p class="small muted" style="margin:0 0 6px">チェックを外したものは検索に使いません。所持数を入れるとその数までに制限します。</p>
+      <input type="search" id="decoQ" placeholder="装飾品名・スキル名で絞り込み" style="width:100%">
+      <div class="skill-list" id="decoList" style="margin-top:8px;max-height:420px"></div>
+    </section>
+  </div>
+
+  <!-- 3タブ目：マイセット -->
+  <div class="pane" data-pane="myset">
+    <section class="box">
+      <h2>マイセット</h2>
+      <div id="mysetList" class="myset-grid"></div>
+    </section>
+    <div id="mysetView" class="stack"></div>
+  </div>
+</main>
+<footer class="note">
+  データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
+</footer>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
