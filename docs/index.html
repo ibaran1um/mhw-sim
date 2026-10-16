@@ -246,7 +246,10 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
   .stats b { font-size: .95rem; }
   .stats .note { font-size: .68rem; }
   .stats .fx { display: none; }
+  .stats .st { white-space: normal; flex-wrap: wrap; row-gap: 0; }
 }
+.tip-cond { margin: 6px 0 8px; padding: 6px 8px; border-left: 3px solid var(--brass); background: var(--brass-soft); border-radius: 4px; font-size: .85rem; line-height: 1.5; }
+.tip-cond b { display: block; font-size: .75rem; color: var(--brass); margin-bottom: 2px; }
 .want-sticky { border-bottom: 4px solid var(--brass); box-shadow: 0 6px 10px -4px rgba(0, 0, 0, .25); margin-bottom: 10px; }
 .want-sticky h2 { border-bottom: 0; padding-bottom: 0; }
 
@@ -435,6 +438,6 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
   データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
 </footer>
 <div id="skillTip" class="skill-tip" role="tooltip" hidden></div>
-<script type="module" src="./app.js?v=20261016b"></script>
+<script type="module" src="./app.js?v=20261016d"></script>
 </body>
 </html>

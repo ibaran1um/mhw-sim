@@ -1,7 +1,7 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261016b";
-import { SKILL_NOTES } from "./skill_notes.js?v=20261016b";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261016d";
+import { SKILL_NOTES } from "./skill_notes.js?v=20261016d";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -28,7 +28,7 @@ try { const saved = localStorage.getItem(LS); if (saved) { Object.assign(state, 
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* 無視 */ } };
 
 // ---------------------------------------------------------------- Worker
-const worker = new Worker(new URL("./worker.js?v=20261016b", import.meta.url), { type: "module" });
+const worker = new Worker(new URL("./worker.js?v=20261016d", import.meta.url), { type: "module" });
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -167,7 +167,8 @@ function renderStats() {
     return ls.length ? ls.map(([t, n]) => { const l = lvOf(n, lvs); const [m0, a0] = [[1, 40], [1.1, 50], [1.2, 60]][l - 1]; return `${EL_JA[t]} <b>${m0 !== 1 ? `×${m0} ` : ""}+${a0}</b>`; }) : ["<b>なし</b>"];
   })();
   out.push(`<div class="st"><span>属性</span>${elRows.join(" ")}</div>`);
-  out.push(`<div class="st"><span>会心倍率</span>物理 <b>×${rawCrit}</b> 属性 <b>×${elCrit}</b></div>`);
+  // 会心時：物理は常に1.25倍（超会心で上がる）、属性は会心撃【属性】があるときだけ上がる
+  out.push(`<div class="st"><span>会心時</span>物理 <b>×${rawCrit}</b>${sc ? "" : `<span class="small muted">（基本値）</span>`} 属性 ${ec ? `<b>×${elCrit}</b>` : `<b>×1</b><span class="small muted">（会心撃【属性】なし）</span>`}</div>`);
   const vague = ST_VAGUE.filter((n) => lvOf(n, lvs));
   const notes = [];
   if (base.atk == null) notes.push("武器欄に攻撃力を入れると実数で表示");
@@ -610,11 +611,11 @@ function showTip(btn) {
     const num = note?.lv?.[r.l];
     return `<tr class="${r.l === cur ? "on" : ""}"><th>${head}</th><td>${esc(r.t).replace(/\n/g, "")}${num ? `<div class="tip-num">${esc(num)}</div>` : ""}</td></tr>`;
   }).join("");
-  const foot = note?.none ? `<div class="tip-foot"><div class="tip-src">具体的な数値の検証資料は見つかりませんでした（ゲーム内の表記のみ）</div></div>`
-    : note ? `<div class="tip-foot">${note.note ? `<div>${esc(note.note)}</div>` : ""}${note.disputed ? `<div class="tip-warn">※${esc(note.disputed)}</div>` : ""}<div class="tip-src">数値は検証値（出典：${esc(note.src)}）</div></div>` : "";
+  const foot = note?.none && !note.lv ? `<div class="tip-foot"><div class="tip-src">具体的な数値の検証資料は見つかりませんでした（ゲーム内の表記のみ）</div></div>`
+    : note ? `<div class="tip-foot">${note.note ? `<div>${esc(note.note)}</div>` : ""}${note.disputed ? `<div class="tip-warn">※${esc(note.disputed)}</div>` : ""}<div class="tip-src">数値・条件の出典：${esc(note.src)}</div></div>` : "";
   const tip = $("skillTip");
   tip.innerHTML = `<div class="tip-head"><b>${esc(s.n)}</b><span class="kind">${KIND[s.k]}</span><button type="button" class="tip-x" aria-label="閉じる">×</button></div>
-    ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}<table class="tip-lv">${rows}</table>${foot}`;
+    ${s.d ? `<p class="tip-desc">${esc(s.d).replace(/\n/g, "")}</p>` : ""}${note?.cond ? `<p class="tip-cond"><b>発動条件</b>${esc(note.cond)}</p>` : ""}<table class="tip-lv">${rows}</table>${foot}`;
   placeTip(btn);
 }
 document.addEventListener("click", (e) => {
@@ -628,7 +629,7 @@ addEventListener("resize", hideTip);
 
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json?v=20261016b", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261016d", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));
