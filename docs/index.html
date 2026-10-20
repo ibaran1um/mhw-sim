@@ -250,6 +250,11 @@ button.on { background: var(--brass); border-color: var(--brass); color: var(--o
 }
 .tip-cond { margin: 6px 0 8px; padding: 6px 8px; border-left: 3px solid var(--brass); background: var(--brass-soft); border-radius: 4px; font-size: .85rem; line-height: 1.5; }
 .tip-cond b { display: block; font-size: .75rem; color: var(--brass); margin-bottom: 2px; }
+.mini.primary-mini { background: var(--brass); color: var(--on-brass); border-color: var(--brass); font-weight: 700; white-space: nowrap; }
+.mini.primary-mini:disabled { opacity: .6; }
+.tal-target { border-left: 3px solid var(--brass); padding: 4px 8px; background: var(--brass-soft); border-radius: 4px; display: flex; flex-direction: column; gap: 4px; }
+#talMsg.ng { color: var(--ng, #d9534f); }
+#talMsg.ok { color: var(--muted); }
 .want-sticky { border-bottom: 4px solid var(--brass); box-shadow: 0 6px 10px -4px rgba(0, 0, 0, .25); margin-bottom: 10px; }
 .want-sticky h2 { border-bottom: 0; padding-bottom: 0; }
 
@@ -398,23 +403,23 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
 
     <section class="box">
       <h2>所持している護石</h2>
-      <div class="stack" id="talList"></div>
       <details style="margin-top:10px" open>
         <summary>護石を追加</summary>
         <div class="stack" style="margin-top:8px">
-          <div class="row"><select id="tk0" class="grow"></select><select id="tl0"></select></div>
-          <div class="row"><select id="tk1" class="grow"></select><select id="tl1"></select></div>
-          <div class="row"><select id="tk2" class="grow"></select><select id="tl2"></select></div>
+          <datalist id="talSkillNames0"></datalist><datalist id="talSkillNames1"></datalist><datalist id="talSkillNames2"></datalist>
+          <div class="row"><input type="search" id="tk0" class="grow" list="talSkillNames0" placeholder="スキル1（名前で検索）" autocomplete="off"><select id="tl0" aria-label="スキル1のLv"></select></div>
+          <div class="row"><input type="search" id="tk1" class="grow" list="talSkillNames1" placeholder="スキル2（名前で検索）" autocomplete="off"><select id="tl1" aria-label="スキル2のLv"></select></div>
+          <div class="row"><input type="search" id="tk2" class="grow" list="talSkillNames2" placeholder="スキル3（名前で検索）" autocomplete="off"><select id="tl2" aria-label="スキル3のLv"></select></div>
           <div class="row">
             <span class="small muted">スロット</span>
-            <select id="tws" aria-label="武器スロット"><option value="0">武器なし</option><option value="1">武器[1]</option></select>
-            <select id="ts0" aria-label="防具スロット1"></select>
-            <select id="ts1" aria-label="防具スロット2"></select>
-            <select id="ts2" aria-label="防具スロット3"></select>
+            <select id="tslot" class="grow" aria-label="スロット"></select>
           </div>
+          <div id="talMsg" class="small"></div>
           <button id="talAdd">護石を登録</button>
         </div>
       </details>
+      <h3 style="margin:14px 0 6px">登録済み</h3>
+      <div class="stack" id="talList"></div>
     </section>
 
     <section class="box">
@@ -438,6 +443,6 @@ button.info:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px
   データ: <a href="https://github.com/LartTyler/mhdb-wilds-data" target="_blank" rel="noopener">mhdb-wilds-data</a>（GPL-3.0）／ 護石抽選テーブル: <a href="https://gamerch.com/mhwilds/937094" target="_blank" rel="noopener">MHWA攻略Wiki</a>。防具の防御力は最大強化時（限界突破を選ぶと突破後の最大値）。
 </footer>
 <div id="skillTip" class="skill-tip" role="tooltip" hidden></div>
-<script type="module" src="./app.js?v=20261016d"></script>
+<script type="module" src="./app.js?v=20261020a"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // 画面ロジック（計算は worker.js に依頼）
 import { TALISMAN_GROUPS, TALISMAN_ROWS } from "./talisman_table.js";
-import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261016d";
-import { SKILL_NOTES } from "./skill_notes.js?v=20261016d";
+import { SKILL_CATEGORIES } from "./skill_categories.js?v=20261020a";
+import { SKILL_NOTES } from "./skill_notes.js?v=20261020a";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -28,7 +28,7 @@ try { const saved = localStorage.getItem(LS); if (saved) { Object.assign(state, 
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* 無視 */ } };
 
 // ---------------------------------------------------------------- Worker
-const worker = new Worker(new URL("./worker.js?v=20261016d", import.meta.url), { type: "module" });
+const worker = new Worker(new URL("./worker.js?v=20261020a", import.meta.url), { type: "module" });
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -251,14 +251,85 @@ function renderArmorCond() {
 }
 
 // ---------------------------------------------------------------- 護石
-function renderTalismanForm() {
-  const skillOpts = [["", "（スキルなし）"], ...skillsSorted.filter((s) => s.k === "weapon" || s.k === "armor").map((s) => [s.id, s.n])];
-  for (let i = 0; i < 3; i++) {
-    optList($(`tk${i}`), skillOpts, "");
-    optList($(`tl${i}`), [1, 2, 3, 4, 5].map((l) => [l, `Lv${l}`]), 1);
-    optList($(`ts${i}`), [[0, "－"], [1, "①"], [2, "②"], [3, "③"]], 0);
-  }
+// 抽選テーブルに出てくるスキル名 → 付きうるLv
+let TAL_LV = null;
+function talLevels() {
+  if (TAL_LV) return TAL_LV;
+  TAL_LV = {};
+  for (const g of Object.values(TALISMAN_GROUPS)) for (const [n, lv] of g.list) (TAL_LV[n.normalize("NFKC")] ||= new Set()).add(lv);
+  return TAL_LV;
 }
+const SLOT_LABEL = (p) => p === "" ? "スロットを選ぶ" : p.split(",").map((x) => (x === "w1" ? "武器①" : "①②③"[+x - 1])).join(" ");
+function talSlotPatterns() {
+  const set = new Set([""]);
+  for (const r of TALISMAN_ROWS) r[4].forEach((p) => set.add(p));
+  const key = (p) => (p.includes("w1") ? 100 : 0) + p.split(",").filter((x) => x !== "w1").reduce((a, x) => a * 10 + +x, 0);
+  return [...set].sort((a, b) => (a === "" ? -1 : b === "" ? 1 : key(a) - key(b)));
+}
+const talNameToId = (name) => skillsSorted.find((s) => s.n === name.trim() && (s.k === "weapon" || s.k === "armor"))?.id || "";
+// 護石フォーム：今の入力と矛盾しない（抽選テーブルで出うる）選択肢だけを出す
+const talNames = () => skillsSorted.filter((s) => (s.k === "weapon" || s.k === "armor") && talLevels()[s.n]).map((s) => s.n);
+function talFeasible(picks, slot) { // picks: [{n, lv}]（空欄は含めない）、slot: "" は未選択
+  if (new Set(picks.map((p) => p.n)).size < picks.length) return false; // 同じスキルは2枠に付かない
+  const has = (grp, x) => TALISMAN_GROUPS[grp].list.some(([n, lv]) => n.normalize("NFKC") === x.n && lv === x.lv);
+  return TALISMAN_ROWS.some(([, g1, g2, g3, pats]) => {
+    if (slot && !pats.includes(slot)) return false;
+    const gs = [g1, g2, g3].filter(Boolean);
+    if (picks.length > gs.length) return false;
+    const assign = (k, used) => k === picks.length || gs.some((grp, i) => !used.has(i) && has(grp, picks[k]) && assign(k + 1, new Set([...used, i])));
+    return assign(0, new Set());
+  });
+}
+function talRead() {
+  const rows = [0, 1, 2].map((i) => {
+    const n = $(`tk${i}`).value.trim();
+    return { n, lv: +$(`tl${i}`).value || 0, known: !!talLevels()[n] };
+  });
+  return { rows, slot: $("tslot").value };
+}
+const otherPicks = (rows, skip) => rows.filter((r, j) => j !== skip && r.n && r.known && r.lv).map((r) => ({ n: r.n, lv: r.lv }));
+function talRefresh() {
+  const { rows, slot } = talRead();
+  for (let i = 0; i < 3; i++) {
+    const others = otherPicks(rows, i);
+    // スキル候補：他の枠とスロットに合う Lv が1つでもあるもの
+    const names = talNames().filter((n) => [...talLevels()[n]].some((lv) => talFeasible([...others, { n, lv }], slot)));
+    $(`talSkillNames${i}`).innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join("");
+    // Lv候補
+    const r = rows[i];
+    const lvs = r.known ? [...talLevels()[r.n]].sort().filter((lv) => talFeasible([...others, { n: r.n, lv }], slot)) : [];
+    const keep = lvs.includes(r.lv) ? r.lv : lvs[0];
+    optList($(`tl${i}`), lvs.length ? lvs.map((l) => [l, `Lv${l}`]) : [["", "Lv"]], keep ?? "");
+    $(`tl${i}`).disabled = !lvs.length;
+    rows[i].lv = keep || 0;
+  }
+  // スロット候補
+  const picks = otherPicks(rows, -1);
+  const pats = talSlotPatterns().filter((p) => p === "" || talFeasible(picks, p));
+  optList($("tslot"), pats.map((p) => [p, SLOT_LABEL(p)]), pats.includes(slot) ? slot : "");
+  // メッセージ
+  const m = $("talMsg"), typed = rows.filter((r) => r.n && !r.known);
+  let ok = false;
+  if (typed.length) {
+    m.className = "ok"; m.textContent = "候補の中から選んでください。";
+  } else if (!picks.length && !$("tslot").value) {
+    m.className = "ok"; m.textContent = "";
+  } else if (!$("tslot").value) {
+    m.className = "ok"; m.textContent = "スロットを選んでください。";
+  } else { ok = true; m.className = "ok"; m.textContent = ""; }
+  $("talAdd").disabled = !ok;
+  return ok;
+}
+function renderTalismanForm() {
+  for (let i = 0; i < 3; i++) $(`tk${i}`).value = "";
+  $("tslot").value = "";
+  talRefresh();
+}
+function talForm() {
+  const { rows, slot } = talRead();
+  return { picks: otherPicks(rows, -1), slot };
+}
+const talCheck = talRefresh;
 function renderTalismans() {
   $("talList").innerHTML = state.talismans.length ? state.talismans.map((t, i) => `<div class="row" style="justify-content:space-between">
       <span>${esc(Object.entries(t.sk).map(([id, l]) => `${sn(id)}${l}`).join(" / ") || "スキルなし")} ${slotHtml(t.sl, t.wsl)}</span>
@@ -278,10 +349,11 @@ function renderMysets() {
   const list = state.mysets || [];
   $("mysetList").innerHTML = list.length ? list.map((m, i) => `<div class="tal">
       <div class="row"><input type="text" class="grow" data-mname="${i}" value="${esc(m.name)}" aria-label="セット名"><span class="def small">防御 <b>${m.s.def}</b></span></div>
+      ${m.tal ? (() => { const t = talInfo(m.tal); return `<div class="tal-target"><div><span class="kind">狙い護石</span> ${t.need}</div><div class="row small"><span class="muted">スロット</span>${t.slots}<span class="muted">以上</span></div><div class="row small"><span class="muted">出る護石</span>${t.rars}</div></div>`; })() : ""}
       <div class="small muted">${m.s.armors.map((a) => esc(a.n)).join("／")}${m.s.talisman ? "／" + esc(m.s.talisman.name) : ""}</div>
       <div class="small">${m.s.skills.filter((k) => m.want && m.want[k.id]).map((k) => `${esc(k.n)}${k.k === "group" ? "" : k.k === "set" ? ["", "Ⅰ", "Ⅱ", "Ⅲ"][k.lv] : k.lv}`).join("・")}</div>
       <div class="row"><button class="mini" data-mshow="${i}">表示</button><button class="mini" data-mdel="${i}">削除</button></div></div>`).join("")
-    : `<div class="empty">検索結果の「マイセット登録」を押すと、ここに保存されます。</div>`;
+    : `<div class="empty">検索結果の「マイセット登録」や、あれば成立する護石の「保存」を押すと、ここに保存されます。</div>`;
 }
 
 // ---------------------------------------------------------------- 装飾品
@@ -377,12 +449,19 @@ function groupSuggestions(res) {
     .sort((a, b) => a.minRar - b.minRar || a.need.length - b.need.length);
 }
 const NAMES = { 5: "未開の護石", 6: "史伝の護石", 7: "秘歴の護石", 8: "栄世の護石" };
-function talCard(g) {
-  const need = g.need.length ? g.need.map((x) => `<b>${esc(x.n)} Lv${x.lv}</b><span class="muted small">以上</span>`).join(" ＋ ") : `<b>スキルは何でもよい</b>`;
+// 狙い護石（必要スキル・スロット・出る護石）の表示。結果画面とマイセットで共用
+function talInfo(t) {
+  const need = t.need.length ? t.need.map((x) => `<b>${esc(x.n)} Lv${x.lv}</b><span class="muted small">以上</span>`).join(" ＋ ") : `<b>スキルは何でもよい</b>`;
   const slotStr = (v) => [...Array(v.w).fill(`<span class="slot w">1</span>`), ...v.a.map((l) => `<span class="slot">${l}</span>`)].join("") || "なし";
-  const slots = g.minPats.map((v) => `<span class="slots">${slotStr(v)}</span>`).join(`<span class="muted small"> または </span>`);
-  const rars = [...g.rars].sort().map((r) => `<span style="white-space:nowrap"><span class="rar r${r}">R${r}</span> ${NAMES[r]}</span>`).join(" ");
-  return `<div class="tal"><div class="nm">${need}</div>
+  const slots = t.pats.map((v) => `<span class="slots">${slotStr(v)}</span>`).join(`<span class="muted small"> または </span>`);
+  const rars = [...t.rars].sort().map((r) => `<span style="white-space:nowrap"><span class="rar r${r}">R${r}</span> ${NAMES[r]}</span>`).join(" ");
+  return { need, slots, rars };
+}
+function talCard(g) {
+  const tal = { need: g.need, pats: g.minPats, rars: [...g.rars].sort() };
+  const { need, slots, rars } = talInfo(tal);
+  const idx = cards.push({ s: g.sol, want: lastReq.want, tal }) - 1;
+  return `<div class="tal"><div class="row" style="justify-content:space-between;align-items:flex-start"><div class="nm">${need}</div><button class="mini primary-mini" data-save="${idx}">保存</button></div>
     <div class="row small"><span class="muted">スロット</span>${slots}<span class="muted">以上</span></div>
     <div class="row small"><span class="muted">出る護石</span>${rars}</div>
     <details><summary>この護石での装備例（防御${g.sol.def}）</summary>${resultCard(g.sol, 0, lastReq)}</details></div>`;
@@ -506,13 +585,17 @@ function bind() {
   $("resRow").addEventListener("change", (e) => { const k = e.target.dataset.res; if (k == null) return; state.minRes[k] = e.target.value; save(); });
   $("useCrafted").addEventListener("change", () => { state.useCrafted = $("useCrafted").checked; save(); });
   $("limitBreak").addEventListener("change", () => { state.limitBreak = $("limitBreak").checked; save(); });
+  for (let i = 0; i < 3; i++) $(`tk${i}`).addEventListener("input", talRefresh);
+  ["tl0", "tl1", "tl2", "tslot"].forEach((id) => $(id).addEventListener("change", talCheck));
   $("talAdd").addEventListener("click", () => {
-    const sk = {};
-    for (let i = 0; i < 3; i++) { const id = $(`tk${i}`).value; if (id) sk[id] = (sk[id] || 0) + +$(`tl${i}`).value; }
-    const sl = [0, 1, 2].map((i) => +$(`ts${i}`).value).filter((x) => x > 0).sort((a, b) => b - a);
-    const wsl = +$("tws").value ? [1] : [];
-    if (!Object.keys(sk).length && !sl.length && !wsl.length) return;
+    if (!talCheck()) return;
+    const f = talForm(), sk = {};
+    for (const p of f.picks) { const id = talNameToId(p.n); if (id) sk[id] = p.lv; }
+    const parts = f.slot ? f.slot.split(",") : [];
+    const sl = parts.filter((x) => x !== "w1").map(Number).sort((a, b) => b - a);
+    const wsl = parts.includes("w1") ? [1] : [];
     state.talismans.push({ sk, sl, wsl }); renderTalismans(); renderTalismanForm(); save();
+    $("talMsg").className = "ok"; $("talMsg").textContent = "登録しました（下の一覧に追加）。";
   });
   $("talList").addEventListener("click", (e) => { const b = e.target.closest("button[data-trm]"); if (!b) return; state.talismans.splice(+b.dataset.trm, 1); renderTalismans(); save(); });
   $("fixList").addEventListener("click", (e) => {
@@ -550,8 +633,9 @@ function bind() {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.save != null) {
       const c = cards[+b.dataset.save]; if (!c) return;
-      state.mysets.push({ name: `セット${state.mysets.length + 1}`, s: c.s, want: c.want, at: Date.now() });
-      renderMysets(); save(); b.textContent = "登録済"; b.disabled = true;
+      const n = state.mysets.filter((m) => !!m.tal === !!c.tal).length + 1;
+      state.mysets.push({ name: c.tal ? `狙い護石${n}` : `セット${n}`, s: c.s, want: c.want, ...(c.tal ? { tal: c.tal } : {}), at: Date.now() });
+      renderMysets(); save(); b.textContent = c.tal ? "保存済" : "登録済"; b.disabled = true;
     }
     if (b.dataset.fix != null) { state.fix[b.dataset.fix] = b.dataset.n; renderFix(); save(); b.textContent = "固定済"; }
     if (b.dataset.ex != null) { if (!state.exclude.includes(b.dataset.ex)) state.exclude.push(b.dataset.ex); renderFix(); save(); b.textContent = "除外済"; }
@@ -629,7 +713,7 @@ addEventListener("resize", hideTip);
 
 // ---------------------------------------------------------------- 起動
 (async () => {
-  data = await (await fetch(new URL("./data.json?v=20261016d", import.meta.url))).json();
+  data = await (await fetch(new URL("./data.json?v=20261020a", import.meta.url))).json();
   skillsSorted = Object.entries(data.skills).map(([id, s]) => ({ id, ...s }))
     .filter((s) => s.n !== "?")
     .sort((a, b) => ["weapon", "armor", "set", "group"].indexOf(a.k) - ["weapon", "armor", "set", "group"].indexOf(b.k) || a.n.localeCompare(b.n, "ja"));
