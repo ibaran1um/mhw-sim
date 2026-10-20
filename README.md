@@ -23,16 +23,6 @@
 - `docs/talisman_table.js` 鑑定護石の抽選テーブル
 - `tools/build_data.py` ゲームデータ → `docs/data.json` 変換
 
-## 公開
-GitHub Pages（`main` ブランチの `/docs`）で配信しています。サーバー不要の静的サイトです。
-ローカル確認: `cd docs && python3 -m http.server` → http://localhost:8000
-
-## データ更新
-```
-git clone https://github.com/LartTyler/mhdb-wilds-data
-python3 tools/build_data.py mhdb-wilds-data/output/merged docs/data.json
-```
-
 ## 既知の制限
 - 限界突破は「レア5は3段・レア6は2段（タマミツネは1段）、左のスロットから1段ずつ、上限③」として計算（攻略Wikiの仕様に基づく）。防御力は強化上限がR5+8段・R6+6段・R7+5段・R8+4段（1段+2）上がるとして計算
 - 巨戟アーティアの付与候補は全シリーズ/全グループを仮定（画面で候補から外せる）
